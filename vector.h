@@ -188,11 +188,11 @@ public:
     }
 
     // Modifiers
-    bool Clear() {
+    void Clear() {
         size_ = 0;
         capacity_ = 0;
         buffer_.reset();
-        buffer_ = nullptr;
+        reallocate();
     }
 
     T* Insert(const T* pos, const T& value) {
@@ -263,7 +263,7 @@ public:
         }
         size_t i = ind;
         for (auto it : ilist) {
-            buffer_[i] = *it;
+            buffer_[i] = it;
             i++;
         }
         size_ += count;
@@ -285,7 +285,7 @@ public:
         }
         size_t i = ind;
         for (auto it = first; it != last; it++) {
-            buffer_[i] = *it;
+            buffer_[i] = it;
             i++;
         }
         size_ += count;
@@ -306,7 +306,8 @@ public:
             buffer_[i] = buffer_[i-1];
         }
         ++size_;
-        std::allocator_traits<std::allocator<T>>::construct(std::allocator<T>::allocator, buffer_.get() + ind, std::forward<Args>(args)...);
+        std::allocator<T> alloc;
+        std::allocator_traits<std::allocator<T>>::construct(alloc, buffer_.get() + ind, std::forward<Args>(args)...);
         return buffer_[ind];
     }
 
@@ -320,7 +321,7 @@ public:
             buffer_[i] = buffer_[i+1];
         }
         --size_;
-        return ind;
+        return buffer_.get() + ind;
     };
  
     T* Erase(const T* first, const T* last) {
@@ -354,12 +355,13 @@ public:
         ++size_;
     }
 
-    template <class... Args>
+    template <typename... Args>
     constexpr T& EmplaceBack(Args&&... args) {
         if (size_ == capacity_) {
             reallocate();
         }
-        std::allocator_traits<std::allocator<T>>::construct(std::allocator<T>::allocator, buffer_.get() + size_, std::forward<Args>(args)...);
+        std::allocator<T> alloc;
+        std::allocator_traits<std::allocator<T>>::construct(alloc, buffer_.get() + size_, std::forward<Args>(args)...);
         ++size_;
         return buffer_[size_ - 1];
     }
@@ -385,7 +387,7 @@ public:
         }
         if (count > size_) {
             for (size_t i = size_; i < count; ++i) {
-                buffer_[i] = value;
+                *buffer_[i] = value;
             }
         }
         size_ = count;
@@ -398,7 +400,7 @@ public:
     }
 
 private:
-    std::unique_ptr<T[]> buffer_[0] = nullptr;
+    std::unique_ptr<T[]> buffer_;
     size_t capacity_ = 0;
     size_t size_ = 0;
 
