@@ -151,23 +151,23 @@ public:
     }
 
     std::reverse_iterator<T*> RBegin() {
-        return buffer_.get();
+        return std::reverse_iterator<T*>(Begin());
     }
     std::reverse_iterator<const T*> RBegin() const {
-        return buffer_.get();
+        return std::reverse_iterator<const T*>(Begin());
     }
     std::reverse_iterator<const T*> CRBegin() const noexcept {
-        return buffer_.get();
+        return std::reverse_iterator<const T*>(CBegin());
     }
     
     std::reverse_iterator<T*> REnd() {
-        return buffer_.get() + size_;
+        return std::reverse_iterator<T*>(End());
     }
     std::reverse_iterator<const T*> REnd() const {
-        return buffer_.get() + size_;
+        return std::reverse_iterator<const T*>(End());
     }
     std::reverse_iterator<const T*> CREnd() const noexcept {
-        return buffer_.get() + size_;
+        return std::reverse_iterator<const T*>(CEnd());
     }
     
     // Capacity
@@ -190,35 +190,34 @@ public:
     // Modifiers
     void Clear() {
         size_ = 0;
-        capacity_ = 0;
-        buffer_.reset();
-        reallocate();
     }
 
     T* Insert(const T* pos, const T& value) {
+        auto pos_ = const_cast<T*>(pos);
+        size_t ind = static_cast<size_t>(std::distance(buffer_.get(), pos_));
+        if (ind > size_) {
+            return pos_;
+        }
+
         if (size_ == capacity_) {
             reallocate();
         }
-        size_t ind = static_cast<size_t>(std::distance(buffer_.get(), pos));
-        if (ind > size_) {
-            return pos;
-        }
-
         for (size_t i = size_; i > ind; --i) {
             buffer_[i] = buffer_[i-1];
         }
         buffer_[ind] = value;
         ++size_;
-        return buffer_[ind];
+        return buffer_.get() + ind;
     }
 
     T* Insert(const T* pos, T&& value) {
+        auto pos_ = const_cast<T*>(pos);
+        size_t ind = static_cast<size_t>(std::distance(buffer_.get(), pos_));
+        if (ind > size_) {
+            return pos_;
+        }
         if (size_ == capacity_) {
             reallocate();
-        }
-        size_t ind = static_cast<size_t>(std::distance(buffer_.get(), pos));
-        if (ind > size_) {
-            return pos;
         }
 
         for (size_t i = size_; i > ind; --i) {
@@ -226,18 +225,18 @@ public:
         }
         buffer_[ind] = std::move(value);
         ++size_;
-        return buffer_[ind];
+        return buffer_.get() + ind;
     }
 
     T* Insert(const T* pos, size_t count, const T& value) {
+        auto pos_ = const_cast<T*>(pos);
+        size_t ind = static_cast<size_t>(std::distance(buffer_.get(), pos_));
+        if (ind > size_) {
+            return pos_;
+        }
         while (size_ + count > capacity_) {
             reallocate();
         }
-        size_t ind = static_cast<size_t>(std::distance(buffer_.get(), pos));
-        if (ind > size_) {
-            return pos;
-        }
-
         for (size_t i = size_ + count - 1; i > ind + count - 1; --i) {
             buffer_[i] = buffer_[i-count];
         }
@@ -245,14 +244,15 @@ public:
              buffer_[i] = value;
         }
         size_ += count;
-        return buffer_[ind];
+        return buffer_.get() + ind;
     }
 
     T* Insert(const T* pos, std::initializer_list<T> ilist) {
-        size_t ind = static_cast<size_t>(std::distance(buffer_.get(), pos));
+        auto pos_ = const_cast<T*>(pos);
+        size_t ind = static_cast<size_t>(std::distance(buffer_.get(), pos_));
         size_t count = ilist.size();
         if (ind > size_) {
-            return pos;
+            return pos_;
         }
 
         while (size_ + count > capacity_) {
@@ -267,14 +267,15 @@ public:
             i++;
         }
         size_ += count;
-        return buffer_[ind];
+        return buffer_.get() + ind;
     }
 
     template <std::input_iterator InputIt>
     T* Insert(const T* pos, InputIt first, InputIt last) {
-        size_t ind = static_cast<size_t>(std::distance(buffer_.get(), pos));
+        auto pos_ = const_cast<T*>(pos);
+        size_t ind = static_cast<size_t>(std::distance(buffer_.get(), pos_));
         if (ind > size_) {
-            return pos;
+            return pos_;
         }
         size_t count = static_cast<size_t>(std::distance(first, last));
         while (size_ + count > capacity_) {
@@ -284,22 +285,23 @@ public:
             buffer_[i] = buffer_[i-count];
         }
         size_t i = ind;
-        for (auto it = first; it != last; it++) {
-            buffer_[i] = it;
-            i++;
+        for (auto it = first; it != last; ++it) {
+            buffer_[i++] = *it;
         }
         size_ += count;
-        return buffer_[ind];
+        return buffer_.get() + ind;
     }
 
     template <class... Args>
     T* Emplace(const T* pos, Args&&... args) {
+        auto pos_ = const_cast<T*>(pos);
+        size_t ind = static_cast<size_t>(std::distance(buffer_.get(), pos_));
+        if (ind > size_) {
+            return pos_;
+        }
+
         if (size_ == capacity_) {
             reallocate();
-        }
-        size_t ind = static_cast<size_t>(std::distance(buffer_.get(), pos));
-        if (ind > size_) {
-            return pos;
         }
 
         for (size_t i = size_; i > ind; --i) {
@@ -308,12 +310,13 @@ public:
         ++size_;
         std::allocator<T> alloc;
         std::allocator_traits<std::allocator<T>>::construct(alloc, buffer_.get() + ind, std::forward<Args>(args)...);
-        return buffer_[ind];
+        return buffer_.get() + ind;
     }
 
     T* Erase(const T* pos) {
-        size_t ind = static_cast<size_t>(std::distance(buffer_.get(), pos));
-        if (ind == size_ - 1) {
+        auto pos_ = const_cast<T*>(pos);
+        size_t ind = static_cast<size_t>(std::distance(buffer_.get(), pos_));
+        if (ind + 1 == size_) {
             return End();
         }
 
@@ -325,19 +328,21 @@ public:
     };
  
     T* Erase(const T* first, const T* last) {
-        size_t ind2 = static_cast<size_t>(std::distance(buffer_.get(), last));
-        if (ind2 == size_ - 1) {
+        auto last_ = const_cast<T*>(last);
+        auto first_ = const_cast<T*>(first);
+        size_t ind2 = static_cast<size_t>(std::distance(buffer_.get(), last_));
+        if (ind2 + 1 == size_) {
             return End;
         }
-        if (std::distance(first, last) == 0) {
-            return last;
+        if (std::distance(first_, last_) == 0) {
+            return last_;
         }
-        size_t ind1 = static_cast<size_t>(std::distance(buffer_.get(), first));
-        for (size_t i = ind1; i < size_ - std::distance(first, last); ++i) {
-            buffer_[i] = buffer_[i + std::distance(first, last)];
+        size_t ind1 = static_cast<size_t>(std::distance(buffer_.get(), first_));
+        for (size_t i = ind1; i < size_ - std::distance(first_, last_); ++i) {
+            buffer_[i] = buffer_[i + std::distance(first_, last_)];
         }
-        return buffer_[size_ - std::distance(first, last) - 1];
-        size_ -= std::distance(first, last);
+        size_ -= std::distance(first_, last_);
+        return buffer_.get() + (size_ - std::distance(first_, last_) - 1);
     }
 
     void PushBack(const T& value) {
@@ -355,7 +360,7 @@ public:
         ++size_;
     }
 
-    template <typename... Args>
+    template <class... Args>
     constexpr T& EmplaceBack(Args&&... args) {
         if (size_ == capacity_) {
             reallocate();
@@ -387,7 +392,7 @@ public:
         }
         if (count > size_) {
             for (size_t i = size_; i < count; ++i) {
-                *buffer_[i] = value;
+                buffer_[i] = value;
             }
         }
         size_ = count;
